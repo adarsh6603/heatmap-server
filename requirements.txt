@@ -2,3 +2,5 @@ flask
 pandas
 seaborn
 matplotlib
+scipy
+numpy
