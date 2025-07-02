@@ -1,43 +1,71 @@
 from flask import Flask, request, send_file
-import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Prevent GUI error in non-main thread
+
 import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
 import io
+import json
 from scipy.interpolate import griddata
 
-app = Flask(__name__)
+app = Flask(_name_)
 
-@app.route('/heatmap', methods=['POST'])
+@app.route("/heatmap", methods=["POST"])
 def generate_heatmap():
-    data = request.get_json()
-    df = pd.DataFrame(data)
+    try:
+        data = request.get_json()
+        if not data or len(data) < 2:
+            return "At least 2 points required", 400
 
-    # Make sure coordinates and RSSI exist
-    if not all(col in df.columns for col in ['x', 'y', 'rssi']):
-        return {"error": "Missing x, y or rssi in input data"}, 400
+        x = [point["x"] for point in data]
+        y = [point["y"] for point in data]
+        rssi = [point["rssi"] for point in data]
 
-    # Extract coordinate values
-    x = df['x'].values
-    y = df['y'].values
-    z = df['rssi'].values  # RSSI
+        # Interpolation grid
+        xi = np.linspace(min(x) - 1, max(x) + 1, 200)
+        yi = np.linspace(min(y) - 1, max(y) + 1, 200)
+        xi, yi = np.meshgrid(xi, yi)
 
-    # Create grid for interpolation
-    grid_x, grid_y = np.mgrid[min(x):max(x):100j, min(y):max(y):100j]
-    grid_z = griddata((x, y), z, (grid_x, grid_y), method='cubic')
+        # Interpolate RSSI
+        zi = griddata((x, y), rssi, (xi, yi), method='cubic')
 
-    # Plotting
-    plt.figure(figsize=(6, 5))
-    plt.imshow(grid_z.T, extent=(min(x), max(x), min(y), max(y)), origin='lower', cmap='coolwarm', aspect='auto')
-    plt.colorbar(label='RSSI (dBm)')
-    plt.title("WiFi RSSI Heatmap")
+        # Plot setup
+        plt.figure(figsize=(7, 6))
+        cmap = plt.get_cmap('coolwarm')
 
-    # Save to buffer
-    img = io.BytesIO()
-    plt.savefig(img, format='png', bbox_inches='tight')
-    img.seek(0)
-    plt.close()
+        # Filled contour
+        contour = plt.contourf(xi, yi, zi, levels=100, cmap=cmap)
 
-    return send_file(img, mimetype='image/png')
+        # Colorbar
+        cbar = plt.colorbar(contour)
+        cbar.set_label("RSSI (dBm)", fontsize=12)
 
-if __name__ == '__main__':
+        # Plot points
+        for i in range(len(x)):
+            plt.scatter(x[i], y[i], color='black', s=20, marker='x')
+
+        # Router marker at (0, 0)
+        plt.scatter(0, 0, color='black', s=120, marker='X', label="Router")
+        plt.legend()
+
+        plt.title("WiFi Signal Heatmap", fontsize=14, weight='bold')
+        plt.xlabel("X Coordinate")
+        plt.ylabel("Y Coordinate")
+        plt.axis('equal')
+        plt.tight_layout()
+
+        # Save to in-memory buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close()
+
+        return send_file(buf, mimetype='image/png')
+
+    except Exception as e:
+        print("Error generating heatmap:", str(e))
+        return "Internal Server Error", 500
+
+if _name_ == "_main_":
     app.run(host='0.0.0.0', port=5000)
