@@ -9,7 +9,7 @@ import io
 import json
 from scipy.interpolate import griddata
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 @app.route("/heatmap", methods=["POST"])
 def generate_heatmap():
@@ -67,5 +67,5 @@ def generate_heatmap():
         print("Error generating heatmap:", str(e))
         return "Internal Server Error", 500
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
